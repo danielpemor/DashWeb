@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+
+# Datos (opcional: comentar si quieres subir los datos a Git)
+data/*.csv
+data/*.shp
+data/*.shx
+data/*.dbf
+data/*.prj
+data/*.cpg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Dash
+assets/.webassets-cache/
