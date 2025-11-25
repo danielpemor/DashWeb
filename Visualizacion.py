@@ -9,8 +9,10 @@ import numpy as np
 import json
 import warnings
 import os
+from pathlib import Path
 
 warnings.filterwarnings('ignore')
+BASE_DIR = Path(__file__).resolve().parent
 
 # ============================================================================
 # CONFIGURACIÓN DE COLORES Y DATOS
@@ -1537,8 +1539,8 @@ if __name__ == '__main__':
     # ⚙️ CONFIGURACIÓN
     # ========================================================================
     
-    CSV_PATH = os.getenv('CSV_PATH', 'data/maestro_electoral_con_metricascorregido.csv')
-    SHP_PATH = os.getenv('SHP_PATH', 'data/SECCION.shp')
+    CSV_PATH = os.getenv('CSV_PATH', str(BASE_DIR / 'data' / 'maestro_electoral_con_metricascorregido.csv'))
+    SHP_PATH = os.getenv('SHP_PATH', str(BASE_DIR / 'data' / 'SECCION.shp'))
     HOST = os.getenv('HOST', '0.0.0.0')
     PORT = int(os.getenv('PORT', 8050))
     DEBUG = os.getenv('DEBUG', 'False') == 'True'
