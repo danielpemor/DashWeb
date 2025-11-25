@@ -1537,8 +1537,10 @@ def crear_grafico_participacion(visualizador, nivel, estado_id):
 # ============================================================================
 
 # Configuración (fuera del main para que esté disponible en producción)
-CSV_PATH = os.getenv('CSV_PATH', 'data/maestro_electoral_con_metricascorregido.csv')
-SHP_PATH = os.getenv('SHP_PATH', 'data/SECCION.shp')
+BASE_DIR = Path(__file__).resolve().parent
+
+CSV_PATH = os.getenv('CSV_PATH', str(BASE_DIR / 'data' / 'maestro_electoral_con_metricascorregido.csv'))
+SHP_PATH = os.getenv('SHP_PATH', str(BASE_DIR / 'data' / 'SECCION.shp'))
 HOST = os.getenv('HOST', '0.0.0.0')
 PORT = int(os.getenv('PORT', 8050))
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
