@@ -1532,20 +1532,28 @@ def crear_grafico_participacion(visualizador, nivel, estado_id):
 # ============================================================================
 # FUNCIÓN PRINCIPAL
 # ============================================================================
+# ============================================================================
+# INICIALIZACIÓN PARA DEPLOY
+# ============================================================================
+
+# Configuración (fuera del main para que esté disponible en producción)
+CSV_PATH = os.getenv('CSV_PATH', 'data/maestro_electoral_con_metricascorregido.csv')
+SHP_PATH = os.getenv('SHP_PATH', 'data/SECCION.shp')
+HOST = os.getenv('HOST', '0.0.0.0')
+PORT = int(os.getenv('PORT', 8050))
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+# Inicializar visualizador y app (FUERA del if __name__)
+print("🔄 Inicializando aplicación para deploy...")
+visualizador = VisualizadorElectoral(CSV_PATH, SHP_PATH)
+app = crear_app(visualizador)
+server = app.server  # ⭐ EXPUESTO PARA GUNICORN
+
+# ============================================================================
+# FUNCIÓN PRINCIPAL (solo para desarrollo local)
+# ============================================================================
 if __name__ == '__main__':
     import sys
-    
-    # ========================================================================
-    # ⚙️ CONFIGURACIÓN
-    # ========================================================================
-    
-    CSV_PATH = os.getenv('CSV_PATH', str(BASE_DIR / 'data' / 'maestro_electoral_con_metricascorregido.csv'))
-    SHP_PATH = os.getenv('SHP_PATH', str(BASE_DIR / 'data' / 'SECCION.shp'))
-    HOST = os.getenv('HOST', '0.0.0.0')
-    PORT = int(os.getenv('PORT', 8050))
-    DEBUG = os.getenv('DEBUG', 'False') == 'True'
-    
-    # ========================================================================
     
     print("="*80)
     print("🗳️  VISUALIZADOR ELECTORAL MÉXICO")
@@ -1581,78 +1589,60 @@ if __name__ == '__main__':
         print("\n❌ NO SE PUEDEN CARGAR LOS ARCHIVOS")
         sys.exit(1)
     
+    print(f"\n✅ DATOS CARGADOS EXITOSAMENTE")
+    print("="*80)
+    print(f"📊 Registros en CSV: {len(visualizador.df):,}")
+    print(f"🗺️  Geometrías en SHP: {len(visualizador.gdf):,}")
+    print(f"🔗 Registros fusionados: {len(visualizador.df_merged):,}")
+    
+    if 'ID_ENTIDAD' in visualizador.df.columns:
+        estados = visualizador.df['ID_ENTIDAD'].nunique()
+        print(f"📍 Estados encontrados: {estados}")
+    
+    if 'SECCION' in visualizador.df.columns:
+        secciones = visualizador.df['SECCION'].nunique()
+        print(f"🔢 Secciones únicas: {secciones:,}")
+    
+    if 'TOTAL_VOTOS_2024' in visualizador.df.columns:
+        total_votos = visualizador.df['TOTAL_VOTOS_2024'].sum()
+        print(f"🗳️  Total de votos 2024: {total_votos:,.0f}")
+    
+    niveles = ['SECCION']
+    if 'DISTRITO_FEDERAL' in visualizador.gdf.columns:
+        niveles.append('DISTRITO_FEDERAL')
+    if 'DISTRITO_LOCAL' in visualizador.gdf.columns:
+        niveles.append('DISTRITO_LOCAL')
+    if 'MUNICIPIO' in visualizador.gdf.columns:
+        niveles.append('MUNICIPIO')
+    print(f"\n🎯 Niveles disponibles: {', '.join(niveles)}")
+    
     print("\n" + "="*80)
-    print("⏳ CARGANDO DATOS...")
-    print("="*80 + "\n")
+    print("🚀 INICIANDO SERVIDOR DE DESARROLLO...")
+    print("="*80)
+    
+    print(f"\n{'='*80}")
+    print(f"✨ ¡APLICACIÓN LISTA!")
+    print(f"{'='*80}")
+    print(f"\n🌐 Abre tu navegador en:")
+    print(f"   👉 http://localhost:{PORT}")
+    print(f"\n💡 Funcionalidades:")
+    print(f"   • Visualización por estado y nivel territorial")
+    print(f"   • Mapas de calor por métrica")
+    print(f"   • Mapa de ganadores por partido")
+    print(f"   • Control de opacidad (slider)")
+    print(f"   • Sin líneas blancas en niveles agregados")
+    print(f"   • Gráficos complementarios")
+    print(f"\n⏹️  Para detener: Ctrl + C")
+    print(f"{'='*80}\n")
     
     try:
-        visualizador = VisualizadorElectoral(CSV_PATH, SHP_PATH)
-        
-        print(f"✅ DATOS CARGADOS EXITOSAMENTE")
-        print("="*80)
-        print(f"📊 Registros en CSV: {len(visualizador.df):,}")
-        print(f"🗺️  Geometrías en SHP: {len(visualizador.gdf):,}")
-        print(f"🔗 Registros fusionados: {len(visualizador.df_merged):,}")
-        
-        if 'ID_ENTIDAD' in visualizador.df.columns:
-            estados = visualizador.df['ID_ENTIDAD'].nunique()
-            print(f"📍 Estados encontrados: {estados}")
-        
-        if 'SECCION' in visualizador.df.columns:
-            secciones = visualizador.df['SECCION'].nunique()
-            print(f"🔢 Secciones únicas: {secciones:,}")
-        
-        if 'TOTAL_VOTOS_2024' in visualizador.df.columns:
-            total_votos = visualizador.df['TOTAL_VOTOS_2024'].sum()
-            print(f"🗳️  Total de votos 2024: {total_votos:,.0f}")
-        
-        niveles = ['SECCION']
-        if 'DISTRITO_FEDERAL' in visualizador.gdf.columns:
-            niveles.append('DISTRITO_FEDERAL')
-        if 'DISTRITO_LOCAL' in visualizador.gdf.columns:
-            niveles.append('DISTRITO_LOCAL')
-        if 'MUNICIPIO' in visualizador.gdf.columns:
-            niveles.append('MUNICIPIO')
-        print(f"\n🎯 Niveles disponibles: {', '.join(niveles)}")
-        
-        print("\n" + "="*80)
-        print("🚀 INICIANDO SERVIDOR WEB...")
-        print("="*80)
-        
-        app = crear_app(visualizador)
-        server = app.server
-        
-        print(f"\n{'='*80}")
-        print(f"✨ ¡APLICACIÓN LISTA!")
-        print(f"{'='*80}")
-        print(f"\n🌐 Abre tu navegador en:")
-        print(f"   👉 http://{HOST}:{PORT}")
-        print(f"\n💡 Funcionalidades:")
-        print(f"   • Visualización por estado y nivel territorial")
-        print(f"   • Mapas de calor por métrica")
-        print(f"   • Mapa de ganadores por partido")
-        print(f"   • Control de opacidad (slider)")
-        print(f"   • Sin líneas blancas en niveles agregados (buffer+unary_union)")
-        print(f"   • Bordes optimizados según nivel")
-        print(f"   • Hover simplificado (Estado + Sección si aplica)")
-        print(f"   • Gráficos complementarios")
-        print(f"   • Descarga de imágenes HD")
-        print(f"\n⏹️  Para detener: Ctrl + C")
-        print(f"{'='*80}\n")
-        
         app.run(
             debug=DEBUG,
             host=HOST,
             port=PORT
         )
-        
-    except FileNotFoundError as e:
-        print(f"\n❌ ERROR AL CARGAR ARCHIVOS:")
-        print(f"   {e}")
-        sys.exit(1)
-        
     except Exception as e:
-        print(f"\n❌ ERROR INESPERADO:")
+        print(f"\n❌ ERROR AL INICIAR SERVIDOR:")
         print(f"   {e}")
         import traceback
         traceback.print_exc()
