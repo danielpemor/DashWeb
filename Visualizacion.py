@@ -80,86 +80,163 @@ coaliciones = ['PAN_PRI_PRD', 'PAN_PRI', 'PAN_PRD', 'PRI_PRD',
 # ============================================================================
 class VisualizadorElectoral:
     def __init__(self, csv_path, shp_path):
-        print("🔄 Cargando datos...")
-        self.df = self.read_csv_file(csv_path)
-        self.gdf = self.read_shapefile(shp_path)
-        self.df_merged = self.merge_data()
-        print(f"✅ Datos listos: {len(self.df_merged):,} registros fusionados\n")
+        print("🔄 Inicializando visualizador (modo optimizado)...")
+        self.csv_path = csv_path
+        self.shp_path = shp_path
+        self.cache_estados = {}  # Cache: {estado_id: df_merged}
+        self.max_cache = 3  # Máximo de estados en memoria
+        print(f"✅ Visualizador listo (carga bajo demanda)\n")
 
-    def read_csv_file(self, file_path):
+    def load_state(self, estado_id):
+        """Carga datos de un estado específico bajo demanda"""
+        
+        # Verificar cache
+        if estado_id in self.cache_estados:
+            print(f"  💾 Usando cache para estado {estado_id} ({ESTADOS.get(estado_id, 'N/A')})")
+            return self.cache_estados[estado_id]
+        
+        print(f"  📥 Cargando estado {estado_id} ({ESTADOS.get(estado_id, 'N/A')})...")
+        
+        # Columnas mínimas necesarias para visualización
+        columnas_base = [
+            'ID_ENTIDAD', 'SECCION', 'LISTA_NOMINAL_2024', 'TOTAL_VOTOS_2024',
+            'PARTICIPACION_PCT', 'ABSTENCION_PCT'
+        ]
+        
+        # Agregar columnas de partidos
+        for year in years:
+            for partido in base_parties:
+                columnas_base.append(f'{partido}_{year}')
+            columnas_base.append(f'TOTAL_VOTOS_{year}')
+            columnas_base.append(f'LISTA_NOMINAL_{year}')
+        
+        # Agregar métricas estratégicas si existen
+        columnas_opcionales = [
+            'RETENCION_', 'CRECIMIENTO_AJUSTADO_', 'SHARE_2024_', 'SHARE_2018_',
+            'CAMBIO_SHARE_', 'VOTOS_GANADOS_', 'VOTOS_PERDIDOS_',
+            'MARGEN_VICTORIA_2024', 'COMPETITIVIDAD', 'VOTOS_PARA_VOLTEAR',
+            'VOLATILIDAD_TOTAL', 'NEP_2024', 'HHI_2024', 'PRIORIDAD_MOVILIZACION',
+            'TIPO_SECCION_ESTRATEGICA', 'GANADOR_2024', 'SEGUNDO_2024',
+            'VOLATILIDAD_HISTORICA_', 'TENDENCIA_HISTORICA_'
+        ]
+        
+        # Leer CSV solo con columnas necesarias
         try:
-            print("  📊 Cargando CSV...")
-            df = pd.read_csv(file_path, encoding='utf-8', low_memory=False)
-            print(f"     {len(df):,} registros cargados")
+            # Primero leer para ver qué columnas existen
+            df_temp = pd.read_csv(self.csv_path, nrows=0)
+            columnas_disponibles = df_temp.columns.tolist()
             
-            numeric_cols = [c for c in df.columns if c not in ['ID_ENTIDAD', 'SECCION']]
-            numeric_cols = [c for c in numeric_cols if not c.startswith('TIPO_')]
-            numeric_cols = [c for c in numeric_cols if not c.startswith('TENDENCIA_')]
-            numeric_cols = [c for c in numeric_cols if c not in ['GANADOR_2024', 'SEGUNDO_2024', 'TIPO_SECCION']]
+            # Filtrar solo las que existen
+            columnas_a_leer = [c for c in columnas_base if c in columnas_disponibles]
             
-            for col in numeric_cols:
-                if 'PARTICIPACION' in col or 'ABSTENCION' in col:
-                    df[col] = pd.to_numeric(
-                        df[col].astype(str).str.replace('%', '').str.replace(',', '').replace('-', '0'), 
-                        errors='coerce'
-                    ).clip(0, 100)
-                else:
-                    df[col] = pd.to_numeric(
-                        df[col].astype(str).str.replace('%', '').str.replace(',', '').replace('-', '0'), 
-                        errors='coerce'
-                    )
+            # Agregar columnas opcionales que existan
+            for patron in columnas_opcionales:
+                columnas_a_leer.extend([c for c in columnas_disponibles if patron in c and c not in columnas_a_leer])
             
-            df['ID_ENTIDAD'] = pd.to_numeric(df['ID_ENTIDAD'], errors='coerce').astype('Int64')
-            df['SECCION'] = pd.to_numeric(df['SECCION'], errors='coerce').astype('Int64')
+            # Leer CSV filtrado
+            df = pd.read_csv(
+                self.csv_path,
+                usecols=columnas_a_leer,
+                dtype={'ID_ENTIDAD': 'int16', 'SECCION': 'int32'},
+                low_memory=False
+            )
             
-            for year in years:
-                total_col = f'TOTAL_VOTOS_{year}'
-                if total_col not in df.columns:
-                    base_cols = [f"{p}_{year}" for p in base_parties if f"{p}_{year}" in df.columns]
-                    if base_cols:
-                        df[total_col] = df[base_cols].sum(axis=1)
-            
-            df = self.calcular_coaliciones(df)
-            print(f"     ✓ CSV procesado - {len(df.columns)} columnas")
-            return df
+            # Filtrar solo el estado
+            df = df[df['ID_ENTIDAD'] == estado_id].copy()
+            print(f"    ✓ CSV: {len(df):,} registros del estado")
             
         except Exception as e:
-            print(f"❌ Error leyendo CSV: {str(e)}")
-            raise
+            print(f"    ⚠️ Error leyendo CSV: {e}")
+            df = pd.read_csv(self.csv_path, low_memory=False)
+            df = df[df['ID_ENTIDAD'] == estado_id].copy()
+        
+        # Procesar CSV (conversiones numéricas)
+        df = self._process_csv_columns(df)
+        
+        # Leer Shapefile filtrado
+        gdf = gpd.read_file(self.shp_path)
+        
+        # Filtrar shapefile por estado
+        if 'ENTIDAD' in gdf.columns:
+            gdf['ID_ENTIDAD'] = pd.to_numeric(gdf['ENTIDAD'], errors='coerce').astype('Int64')
+        
+        gdf = gdf[gdf['ID_ENTIDAD'] == estado_id].copy()
+        print(f"    ✓ SHP: {len(gdf):,} geometrías del estado")
+        
+        # Procesar shapefile
+        gdf = self._process_shapefile(gdf)
+        
+        # Merge
+        columnas_merge = ['SECCION', 'ID_ENTIDAD']
+        merged = gdf.merge(df, on=columnas_merge, how='left', suffixes=('_geo', '_data'))
+        merged = merged.drop_duplicates(subset=columnas_merge, keep='first')
+        
+        # Calcular coaliciones
+        merged = self.calcular_coaliciones(merged)
+        
+        print(f"    ✓ Merge: {len(merged):,} registros")
+        
+        # Gestión de cache: eliminar estado más antiguo si superamos el límite
+        if len(self.cache_estados) >= self.max_cache:
+            oldest_state = next(iter(self.cache_estados))
+            del self.cache_estados[oldest_state]
+            print(f"    🗑️ Eliminado estado {oldest_state} del cache")
+        
+        # Guardar en cache
+        self.cache_estados[estado_id] = merged
+        
+        return merged
 
-    def read_shapefile(self, shapefile_path):
+    def _process_csv_columns(self, df):
+        """Procesa columnas numéricas del CSV"""
+        numeric_cols = [c for c in df.columns if c not in ['ID_ENTIDAD', 'SECCION']]
+        numeric_cols = [c for c in numeric_cols if not c.startswith('TIPO_')]
+        numeric_cols = [c for c in numeric_cols if not c.startswith('TENDENCIA_')]
+        numeric_cols = [c for c in numeric_cols if c not in ['GANADOR_2024', 'SEGUNDO_2024', 'TIPO_SECCION']]
+        
+        for col in numeric_cols:
+            if 'PARTICIPACION' in col or 'ABSTENCION' in col:
+                df[col] = pd.to_numeric(
+                    df[col].astype(str).str.replace('%', '').str.replace(',', '').replace('-', '0'), 
+                    errors='coerce'
+                ).clip(0, 100)
+            else:
+                df[col] = pd.to_numeric(
+                    df[col].astype(str).str.replace('%', '').str.replace(',', '').replace('-', '0'), 
+                    errors='coerce'
+                )
+        
+        return df
+    
+    def _process_shapefile(self, gdf):
+        """Procesa shapefile con simplificación y conversiones"""
+        gdf['SECCION'] = pd.to_numeric(gdf['SECCION'], errors='coerce').astype('Int64')
+        
+        if 'DISTRITO_F' in gdf.columns:
+            gdf['DISTRITO_FEDERAL'] = pd.to_numeric(gdf['DISTRITO_F'], errors='coerce').astype('Int64')
+        if 'DISTRITO_L' in gdf.columns:
+            gdf['DISTRITO_LOCAL'] = pd.to_numeric(gdf['DISTRITO_L'], errors='coerce').astype('Int64')
+        if 'MUNICIPIO' in gdf.columns:
+            gdf['MUNICIPIO'] = pd.to_numeric(gdf['MUNICIPIO'], errors='coerce').astype('Int64')
+        
+        if gdf.crs is None or gdf.crs.to_epsg() != 4326:
+            gdf = gdf.to_crs(epsg=4326)
+        
+        gdf['geometry'] = gdf['geometry'].simplify(tolerance=0.001, preserve_topology=True)
+        
+        return gdf
+    
+    def get_available_states(self):
+        """Obtiene lista de estados disponibles sin cargar todos los datos"""
         try:
-            print("  🗺️  Cargando Shapefile...")
-            gdf = gpd.read_file(shapefile_path, encoding='utf-8')
-            print(f"     {len(gdf):,} geometrías cargadas")
-            
-            if 'ENTIDAD' in gdf.columns:
-                gdf['ID_ENTIDAD'] = pd.to_numeric(gdf['ENTIDAD'], errors='coerce').astype('Int64')
-            elif 'ID_ENTIDAD' in gdf.columns:
-                gdf['ID_ENTIDAD'] = pd.to_numeric(gdf['ID_ENTIDAD'], errors='coerce').astype('Int64')
-            
-            gdf['SECCION'] = pd.to_numeric(gdf['SECCION'], errors='coerce').astype('Int64')
-            
-            if 'DISTRITO_F' in gdf.columns:
-                gdf['DISTRITO_FEDERAL'] = pd.to_numeric(gdf['DISTRITO_F'], errors='coerce').astype('Int64')
-            if 'DISTRITO_L' in gdf.columns:
-                gdf['DISTRITO_LOCAL'] = pd.to_numeric(gdf['DISTRITO_L'], errors='coerce').astype('Int64')
-            if 'MUNICIPIO' in gdf.columns:
-                gdf['MUNICIPIO'] = pd.to_numeric(gdf['MUNICIPIO'], errors='coerce').astype('Int64')
-            
-            if gdf.crs is None or gdf.crs.to_epsg() != 4326:
-                print("     🔄 Reproyectando a WGS84...")
-                gdf = gdf.to_crs(epsg=4326)
-            
-            print("     🔄 Simplificando geometrías...")
-            gdf['geometry'] = gdf['geometry'].simplify(tolerance=0.001, preserve_topology=True)
-            
-            print(f"     ✓ Shapefile procesado")
-            return gdf
-            
+            # Leer solo la columna ID_ENTIDAD del CSV
+            df_estados = pd.read_csv(self.csv_path, usecols=['ID_ENTIDAD'], dtype={'ID_ENTIDAD': 'int16'})
+            estados_disponibles = sorted(df_estados['ID_ENTIDAD'].unique())
+            return estados_disponibles
         except Exception as e:
-            print(f"❌ Error leyendo shapefile: {str(e)}")
-            raise
+            print(f"⚠️ Error obteniendo estados: {e}")
+            # Retornar todos los estados por defecto
+            return list(ESTADOS.keys())
 
     def calcular_coaliciones(self, df):
         def get_col_safe(df, col_name):
@@ -188,38 +265,13 @@ class VisualizadorElectoral:
         df['GANADOR_COALICION'] = df.apply(determinar_ganador_coalicion, axis=1)
         return df
 
-    def merge_data(self):
-        print("  🔗 Fusionando datos...")
-        
-        columnas_merge = []
-        if 'SECCION' in self.gdf.columns and 'SECCION' in self.df.columns:
-            columnas_merge.append('SECCION')
-        if 'ID_ENTIDAD' in self.gdf.columns and 'ID_ENTIDAD' in self.df.columns:
-            columnas_merge.append('ID_ENTIDAD')
-        
-        if not columnas_merge:
-            raise ValueError("❌ No hay columnas comunes para hacer merge")
-        
-        print(f"     Fusionando por: {columnas_merge}")
-        
-        merged = self.gdf.merge(
-            self.df, 
-            on=columnas_merge, 
-            how='left',
-            suffixes=('_geo', '_data')
-        )
-        
-        if len(columnas_merge) > 0:
-            merged = merged.drop_duplicates(subset=columnas_merge, keep='first')
-        
-        print(f"     ✓ Merge completado: {len(merged):,} registros")
-        return merged
-
     def agregar_por_nivel(self, nivel, estado_id=None):
-        df = self.df_merged.copy()
+        # OPTIMIZACIÓN: Cargar estado bajo demanda
+        if estado_id is None:
+            raise ValueError("❌ Debe especificar un estado (modo optimizado)")
         
-        if estado_id:
-            df = df[df['ID_ENTIDAD'] == estado_id]
+        # Cargar datos del estado (usa cache si ya está cargado)
+        df = self.load_state(estado_id)
         
         if nivel == 'SECCION':
             return df
@@ -857,7 +909,15 @@ class VisualizadorElectoral:
         return fig
 
     def generar_estadisticas(self, nivel='SECCION', estado_id=None, metrica=None):
-        df = self.agregar_por_nivel(nivel, estado_id)
+        # OPTIMIZACIÓN: Validar que haya estado
+        if estado_id is None:
+            return {}
+        
+        try:
+            df = self.agregar_por_nivel(nivel, estado_id)
+        except Exception as e:
+            print(f"⚠️ Error al generar estadísticas: {e}")
+            return {}
         
         if len(df) == 0:
             return {}
@@ -944,6 +1004,13 @@ class VisualizadorElectoral:
 # ============================================================================
 def crear_app(visualizador):
     app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.FONT_AWESOME])
+    
+    # OPTIMIZACIÓN: Obtener estados disponibles sin cargar todos los datos
+    try:
+        estados_disponibles = visualizador.get_available_states()
+        print(f"   ✓ Estados disponibles: {len(estados_disponibles)}")
+    except:
+        estados_disponibles = list(ESTADOS.keys())
     
     metricas_disponibles = []
     
@@ -1041,8 +1108,9 @@ def crear_app(visualizador):
                         dcc.Dropdown(
                             id='dropdown-estado',
                             options=[{'label': nombre, 'value': id_est} 
-                                     for id_est, nombre in sorted(ESTADOS.items(), key=lambda x: x[1])],
-                            value=1,
+                                     for id_est, nombre in sorted(ESTADOS.items(), key=lambda x: x[1])
+                                     if id_est in estados_disponibles],  # OPTIMIZACIÓN: Solo disponibles
+                            value=estados_disponibles[0] if estados_disponibles else 1,  # Primer estado disponible
                             clearable=False,
                             placeholder="Selecciona un estado...",
                             className="mb-3"
@@ -1099,6 +1167,16 @@ def crear_app(visualizador):
                         
                         html.Hr(),
                         
+                        # NUEVO: Indicador de modo optimizado
+                        dbc.Alert([
+                            html.I(className="fas fa-bolt me-2"),
+                            html.Small([
+                                "⚡ Modo optimizado: Los datos se cargan bajo demanda por estado."
+                            ], style={'fontSize': '10px'})
+                        ], color="success", className="mb-3 mt-2", style={'padding': '6px'}),
+                        
+                        html.Hr(),
+                        
                         dbc.Checklist(
                             options=[{
                                 "label": html.Span([
@@ -1149,6 +1227,8 @@ def crear_app(visualizador):
                         dcc.Loading(
                             id="loading-mapa",
                             type="circle",
+                            color="#2C3E50",
+                            loading_state={'is_loading': True},
                             children=[
                                 dcc.Graph(
                                     id='mapa-principal',
@@ -1242,7 +1322,19 @@ def crear_app(visualizador):
          State('slider-opacidad', 'value')]
     )
     def actualizar_visualizacion(n_clicks, estado_id, nivel, metrica, mostrar_ganador, opacidad):
-        estado_id = None if estado_id == 0 else estado_id
+        # OPTIMIZACIÓN: Validar que haya estado seleccionado
+        if estado_id is None or estado_id == 0:
+            return (
+                go.Figure().add_annotation(
+                    text="⚠️ Selecciona un estado para comenzar",
+                    xref="paper", yref="paper", x=0.5, y=0.5,
+                    showarrow=False, font=dict(size=20, color='orange')
+                ),
+                [dbc.Col([html.P("Selecciona un estado", className="text-muted")], width=12)],
+                go.Figure(),
+                go.Figure()
+            )
+        
         mostrar_ganador = len(mostrar_ganador) > 0 if mostrar_ganador else False
         
         fig_mapa = visualizador.crear_mapa(
@@ -1539,17 +1631,24 @@ def crear_grafico_participacion(visualizador, nivel, estado_id):
 # Configuración (fuera del main para que esté disponible en producción)
 BASE_DIR = Path(__file__).resolve().parent
 
-CSV_PATH = os.getenv('CSV_PATH', str(BASE_DIR / 'data' / 'maestro_electoral_con_metricascorregido.csv'))
-SHP_PATH = os.getenv('SHP_PATH', str(BASE_DIR / 'data' / 'SECCION.shp'))
+# ⭐ INICIALIZACIÓN OPTIMIZADA (PARA DEPLOY)
+CSV_PATH = os.getenv('CSV_PATH', 'data/maestro_electoral_con_metricascorregido.csv')
+SHP_PATH = os.getenv('SHP_PATH', 'data/SECCION.shp')
 HOST = os.getenv('HOST', '0.0.0.0')
 PORT = int(os.getenv('PORT', 8050))
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-# Inicializar visualizador y app (FUERA del if __name__)
-print("🔄 Inicializando aplicación para deploy...")
+print("🔄 Inicializando aplicación (modo optimizado)...")
+print(f"   📂 CSV: {CSV_PATH}")
+print(f"   📂 SHP: {SHP_PATH}")
+
+# Crear visualizador SIN cargar datos (lazy loading)
 visualizador = VisualizadorElectoral(CSV_PATH, SHP_PATH)
+
+print("✅ Aplicación lista (datos se cargarán bajo demanda)")
+
 app = crear_app(visualizador)
-server = app.server  # ⭐ EXPUESTO PARA GUNICORN
+server = app.server  # Expuesto para Gunicorn
 
 # ============================================================================
 # FUNCIÓN PRINCIPAL (solo para desarrollo local)
@@ -1591,11 +1690,12 @@ if __name__ == '__main__':
         print("\n❌ NO SE PUEDEN CARGAR LOS ARCHIVOS")
         sys.exit(1)
     
-    print(f"\n✅ DATOS CARGADOS EXITOSAMENTE")
+    print(f"\n✅ APLICACIÓN INICIALIZADA (modo optimizado)")
     print("="*80)
-    print(f"📊 Registros en CSV: {len(visualizador.df):,}")
-    print(f"🗺️  Geometrías en SHP: {len(visualizador.gdf):,}")
-    print(f"🔗 Registros fusionados: {len(visualizador.df_merged):,}")
+    print(f"📊 Modo: Carga bajo demanda por estado")
+    print(f"💾 Cache: Hasta {visualizador.max_cache} estados en memoria simultáneos")
+    print(f"📁 CSV disponible: {CSV_PATH}")
+    print(f"📁 SHP disponible: {SHP_PATH}")
     
     if 'ID_ENTIDAD' in visualizador.df.columns:
         estados = visualizador.df['ID_ENTIDAD'].nunique()
