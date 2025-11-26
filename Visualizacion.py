@@ -80,12 +80,20 @@ coaliciones = ['PAN_PRI_PRD', 'PAN_PRI', 'PAN_PRD', 'PRI_PRD',
 # ============================================================================
 class VisualizadorElectoral:
     def __init__(self, csv_path, shp_path):
+        """Inicializa el visualizador en modo lazy loading (optimizado)"""
         print("🔄 Inicializando visualizador (modo optimizado)...")
+        
+        # Guardar paths para carga bajo demanda
         self.csv_path = csv_path
         self.shp_path = shp_path
-        self.cache_estados = {}  # Cache: {estado_id: df_merged}
-        self.max_cache = 3  # Máximo de estados en memoria
-        print(f"✅ Visualizador listo (carga bajo demanda)\n")
+        
+        # Cache de estados
+        self.cache_estados = {}  # {estado_id: GeoDataFrame merged}
+        self.max_cache = 3  # Máximo de estados en memoria simultáneos
+        
+        print(f"✅ Visualizador listo (carga bajo demanda)")
+        print(f"   📂 CSV: {self.csv_path}")
+        print(f"   📂 SHP: {self.shp_path}\n")
 
     def load_state(self, estado_id):
         """Carga datos de un estado específico bajo demanda"""
