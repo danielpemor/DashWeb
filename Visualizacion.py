@@ -64,16 +64,186 @@ COLORES_TIPO_SECCION = {
 }
 
 COLORES_TENDENCIA = {
-    'CRECIMIENTO_SOSTENIDO': '#28a745', 'EXPANSION_RAPIDA': '#20c997',
-    'CRECIMIENTO': '#7cb342', 'VOLATIL': '#ffc107', 'DECLIVE': '#ff9800',
-    'DECLIVE_SOSTENIDO': '#fd7e14', 'DECLIVE_RAPIDO': '#dc3545',
-    'AUGE_Y_CAIDA': '#e83e8c', 'RECUPERACION': '#17a2b8'
+    'CRECIMIENTO_SOSTENIDO': '#28a745',
+    'EXPANSION_RAPIDA': '#20c997',
+    'CRECIMIENTO': '#7cb342',
+    'VOLATIL': '#ffc107',
+    'DECLIVE': '#ff9800',
+    'DECLIVE_SOSTENIDO': '#fd7e14',
+    'DECLIVE_RAPIDO': '#dc3545',
+    'AUGE_Y_CAIDA': '#e83e8c',
+    'RECUPERACION': '#17a2b8'
+}
+
+# Diccionario de descripciones de métricas
+DESCRIPCIONES_METRICAS = {
+    'PARTICIPACION_PCT': {
+        'nombre': '¿Cuánta gente fue a votar?',
+        'descripcion': 'De cada 100 personas que podían votar, cuántas sí fueron a las urnas',
+        'formula': '(Personas que votaron / Total de personas registradas) × 100',
+        'rango': '0-100%',
+        'uso': 'Saber qué tan activa es la gente en cada zona'
+    },
+    'ABSTENCION_PCT': {
+        'nombre': '¿Cuánta gente NO fue a votar?',
+        'descripcion': 'De cada 100 personas que podían votar, cuántas se quedaron en casa',
+        'formula': '100 - Porcentaje que sí votó',
+        'rango': '0-100%',
+        'uso': 'Identificar zonas donde hay gente por convencer para que participe'
+    },
+    'MARGEN_VICTORIA_2024': {
+        'nombre': '¿Qué tan reñida estuvo la elección?',
+        'descripcion': 'Por cuántos votos ganó el primer lugar vs el segundo (como la diferencia de goles en un partido)',
+        'formula': '(Votos del ganador - Votos del segundo) / Total de votos × 100',
+        'rango': '0-100%',
+        'interpretacion': 'Menos de 5%=Súper reñida | 5-10%=Competida | 10-20%=Ventaja clara | Más de 20%=Ganó fácil',
+        'uso': 'Ver en qué zonas estuvo "apretada" la elección'
+    },
+    'COMPETITIVIDAD': {
+        'nombre': '¿Qué tan peleada está esta zona?',
+        'descripcion': 'Qué tan cerca está el segundo lugar de alcanzar al primero (0=Imposible, 100=Empate técnico)',
+        'formula': '100 - Margen de victoria',
+        'rango': '0-100',
+        'interpretacion': 'Más de 80=Zona en disputa | 60-80=Competida | 40-60=Ventaja moderada | Menos de 40=Difícil de voltear',
+        'uso': 'Identificar zonas donde vale la pena invertir esfuerzo'
+    },
+    'VOTOS_PARA_VOLTEAR': {
+        'nombre': '¿Cuántos votos se necesitan para cambiar el resultado?',
+        'descripcion': 'Si el segundo lugar convenciera a esta cantidad de personas, le ganaría al primero',
+        'formula': '(Diferencia de votos / 2) + 1',
+        'rango': '1 voto en adelante',
+        'uso': 'Calcular qué tan costoso sería cambiar el resultado en esta zona'
+    },
+    'TIPO_SECCION_ESTRATEGICA': {
+        'nombre': '¿Qué tipo de zona es?',
+        'descripcion': 'Clasificación de la zona según su importancia estratégica (como priorizar tareas urgentes vs opcionales)',
+        'valores': 'CRÍTICA=Urgente defender | OPORTUNIDAD=Buen lugar para crecer | RIESGO=Zona en peligro | MOVILIZABLE=Gente por convencer | CONSOLIDADA=Ya ganada | BAJA PRIORIDAD=No prioritaria | NORMAL=Sin particularidades',
+        'uso': 'Decidir dónde concentrar esfuerzo y recursos'
+    },
+    'PRIORIDAD_MOVILIZACION': {
+        'nombre': '¿Qué tan urgente es trabajar esta zona?',
+        'descripcion': 'Calificación de 0 a 100 que indica qué tan importante es visitar y trabajar esta zona',
+        'formula': 'Cálculo automático basado en competitividad, tamaño y situación de la zona',
+        'rango': '0-100 puntos',
+        'interpretacion': 'Más de 90=¡URGENTE! | 80-90=Alta prioridad | 60-80=Prioridad media | 40-60=Prioridad baja | Menos de 40=Baja urgencia',
+        'uso': 'Hacer una lista de zonas ordenadas por urgencia de visita'
+    },
+    'VOLATILIDAD_TOTAL': {
+        'nombre': '¿Qué tan cambiante es el voto en esta zona?',
+        'descripcion': 'Qué tanto cambian las preferencias políticas de la gente entre elecciones (como la estabilidad del clima)',
+        'formula': 'Suma de cambios entre partidos entre 2018 y 2024',
+        'rango': '0-100',
+        'interpretacion': 'Menos de 10=Voto muy estable | 10-20=Cambios moderados | 20-30=Mucho cambio | Más de 30=Voto muy cambiante',
+        'uso': 'Identificar zonas donde la gente cambia fácilmente de opinión (buenos para campañas)'
+    },
+    'NEP_2024': {
+        'nombre': '¿Cuántos partidos realmente compiten?',
+        'descripcion': 'No es lo mismo tener 5 partidos donde uno domina, que 5 partidos parejos. Este número dice cuántos "realmente cuentan"',
+        'formula': 'Cálculo que pondera el tamaño de cada partido',
+        'rango': '1 partido en adelante',
+        'interpretacion': 'Menos de 2=Domina 1 partido | 2-3=Compiten 2 partidos | 3-4=Compiten 3-4 partidos | Más de 5=Voto muy repartido',
+        'uso': 'Saber si es una zona de "uno contra uno" o si hay varios competidores fuertes'
+    },
+    'HHI_2024': {
+        'nombre': '¿Qué tan concentrado está el poder?',
+        'descripcion': 'Número que dice si los votos están muy repartidos o si un partido domina (como un mercado donde una tienda tiene casi todos los clientes)',
+        'formula': 'Suma de cuadrados de porcentajes de cada partido',
+        'rango': '0-10,000',
+        'interpretacion': 'Menos de 1,500=Voto muy repartido | 1,500-2,500=Concentración moderada | Más de 2,500=Un partido domina',
+        'uso': 'Evaluar si hay competencia real o si un partido controla todo'
+    },
+    'GANADOR_2024': {
+        'nombre': 'Partido Ganador 2024',
+        'descripcion': 'Qué partido o coalición obtuvo más votos en esta zona',
+        'uso': 'Identificar qué zonas controla cada partido'
+    },
+    'SEGUNDO_2024': {
+        'nombre': 'Segundo Lugar 2024',
+        'descripcion': 'Qué partido quedó en segundo lugar (el rival más cercano)',
+        'uso': 'Identificar al competidor directo en cada zona'
+    },
 }
 
 base_parties = ['PAN', 'PRI', 'PRD', 'PVEM', 'PT', 'MC', 'MORENA']
 years = ['2012', '2018', '2024']
 coaliciones = ['PAN_PRI_PRD', 'PAN_PRI', 'PAN_PRD', 'PRI_PRD',
                'PVEM_PT_MORENA', 'PVEM_PT', 'PVEM_MORENA', 'PT_MORENA']
+
+for partido in ['PAN', 'PRI', 'PRD', 'MORENA', 'PVEM', 'PT', 'MC']:
+    DESCRIPCIONES_METRICAS[f'RETENCION_{partido}'] = {
+        'nombre': f'¿Cuántos votantes de {partido} se quedaron fieles?',
+        'descripcion': f'De cada 100 personas que votaron por {partido} en 2018, cuántas lo volvieron a hacer en 2024',
+        'formula': '(Votantes que se mantuvieron / Total de votantes 2018) × 100',
+        'rango': '0-100%',
+        'interpretacion': '90-100%=Base muy leal | 75-90%=Lealtad aceptable | 60-75%=Están perdiendo gente | Menos de 60%=Crisis grave',
+        'uso': 'Medir qué tan sólida es la base de apoyo del partido'
+    }
+    
+    DESCRIPCIONES_METRICAS[f'CRECIMIENTO_AJUSTADO_{partido}'] = {
+        'nombre': f'¿Qué tan bien le fue a {partido} realmente?',
+        'descripcion': f'Crecimiento real de {partido} considerando que más o menos gente fue a votar',
+        'formula': 'Crecimiento ajustado por cambios en participación general',
+        'rango': '-100% a +200%',
+        'interpretacion': 'Más de 50%=Crecimiento excepcional | 30-50%=Crecimiento sólido | 10-30%=Crecimiento moderado | Menos de 0%=Está perdiendo terreno',
+        'uso': 'Identificar estrategias exitosas que se pueden replicar'
+    }
+    
+    DESCRIPCIONES_METRICAS[f'SHARE_2024_{partido}'] = {
+        'nombre': f'¿Qué porción del pastel obtuvo {partido}?',
+        'descripcion': f'De cada 100 votos emitidos, cuántos fueron para {partido}',
+        'formula': f'(Votos de {partido} / Total de votos) × 100',
+        'rango': '0-100%',
+        'uso': 'Ver qué tan fuerte es el partido en términos relativos'
+    }
+    
+    DESCRIPCIONES_METRICAS[f'VOTOS_GANADOS_{partido}'] = {
+        'nombre': f'¿Cuántos votos nuevos consiguió {partido}?',
+        'descripcion': f'Votos adicionales que {partido} obtuvo en 2024 comparado con 2018',
+        'formula': 'Votos 2024 - Votos 2018 (solo si es positivo)',
+        'rango': '0 votos en adelante',
+        'uso': 'Medir el crecimiento absoluto del partido'
+    }
+    
+    DESCRIPCIONES_METRICAS[f'VOTOS_PERDIDOS_{partido}'] = {
+        'nombre': f'¿Cuántos votos perdió {partido}?',
+        'descripcion': f'Votos que {partido} tenía en 2018 pero ya no tiene en 2024',
+        'formula': 'Votos 2018 - Votos 2024 (solo si es positivo)',
+        'rango': '0 votos en adelante',
+        'uso': 'Medir la deserción o pérdida de apoyo'
+    }
+    
+    DESCRIPCIONES_METRICAS[f'VOLATILIDAD_HISTORICA_{partido}'] = {
+        'nombre': f'¿Qué tan estable es el apoyo a {partido}?',
+        'descripcion': f'Qué tanto varían los votos de {partido} entre elecciones (si sube y baja mucho o se mantiene)',
+        'formula': 'Desviación estándar de votos en 2012, 2018 y 2024',
+        'rango': '0 votos en adelante',
+        'interpretacion': 'Bajo=Apoyo muy estable | Alto=Apoyo errático (sube y baja)',
+        'uso': 'Identificar si el partido tiene votantes leales o cambiantes'
+    }
+    
+    DESCRIPCIONES_METRICAS[f'CAMBIO_SHARE_{partido}'] = {
+        'nombre': f'¿Creció o disminuyó la popularidad de {partido}?',
+        'descripcion': f'Cuánto creció o disminuyó la porción del pastel electoral de {partido} entre 2018 y 2024',
+        'formula': 'Porcentaje 2024 - Porcentaje 2018',
+        'rango': '-100% a +100%',
+        'interpretacion': 'Positivo=Ganó terreno | Negativo=Perdió terreno | Cercano a 0=Se mantuvo igual',
+        'uso': 'Ver si un partido está ganando o perdiendo popularidad relativa'
+    }
+    
+    DESCRIPCIONES_METRICAS[f'SHARE_2018_{partido}'] = {
+        'nombre': f'¿Qué porción del pastel tenía {partido} en 2018?',
+        'descripcion': f'De cada 100 votos emitidos en 2018, cuántos fueron para {partido}',
+        'formula': f'(Votos de {partido} en 2018 / Total de votos 2018) × 100',
+        'rango': '0-100%',
+        'uso': 'Comparar con 2024 para ver crecimiento o declive'
+    }
+    
+    DESCRIPCIONES_METRICAS[f'TENDENCIA_HISTORICA_{partido}'] = {
+        'nombre': f'¿Qué patrón sigue {partido} en el tiempo?',
+        'descripcion': f'Si {partido} está en crecimiento constante, declive, recuperación o tiene altibajos',
+        'valores': 'CRECIMIENTO SOSTENIDO=Sube constantemente | DECLIVE SOSTENIDO=Baja constantemente | AUGE Y CAÍDA=Subió pero ahora baja | RECUPERACIÓN=Bajó pero ahora sube | VOLÁTIL=Muy cambiante',
+        'uso': 'Identificar ciclos y tendencias de largo plazo'
+    }
 
 # ============================================================================
 # CLASE PRINCIPAL
@@ -115,8 +285,10 @@ class VisualizadorElectoral:
         for year in years:
             for partido in base_parties:
                 columnas_base.append(f'{partido}_{year}')
-            columnas_base.append(f'TOTAL_VOTOS_{year}')
-            columnas_base.append(f'LISTA_NOMINAL_{year}')
+            for coalicion in coaliciones:
+                columnas_base.append(f'{coalicion}_2024')
+                columnas_base.append(f'TOTAL_VOTOS_{year}')
+                columnas_base.append(f'LISTA_NOMINAL_{year}')
         
         # Agregar métricas estratégicas si existen
         columnas_opcionales = [
@@ -516,9 +688,23 @@ class VisualizadorElectoral:
         
         if es_participacion or 'SHARE' in metrica or 'RETENCION' in metrica or 'CRECIMIENTO_AJUSTADO' in metrica or 'CAMBIO_SHARE' in metrica:
             column_to_plot = metrica
-            gdf_plot[column_to_plot] = gdf_plot[column_to_plot].clip(0, 100)
-            max_val = 100
-            color_scale = 'Reds' if 'PARTICIPACION' in metrica else 'Oranges'
+            
+            # CORRECCIÓN: Detectar si hay valores negativos (para CAMBIO_SHARE, CRECIMIENTO_AJUSTADO)
+            min_val = gdf_plot[column_to_plot].min()
+            max_val = gdf_plot[column_to_plot].max()
+            
+            if min_val < 0:
+                # Escala divergente para valores negativos
+                abs_max = max(abs(min_val), abs(max_val))
+                gdf_plot[column_to_plot] = gdf_plot[column_to_plot].clip(-abs_max, abs_max)
+                color_scale = 'RdBu_r'  # Azul (negativo) -> Blanco (cero) -> Rojo (positivo)
+                range_color = [-abs_max, abs_max]
+            else:
+                # Escala normal para valores positivos
+                gdf_plot[column_to_plot] = gdf_plot[column_to_plot].clip(0, 100)
+                max_val = 100
+                color_scale = 'Reds' if 'PARTICIPACION' in metrica else 'Oranges'
+                range_color = [0, max_val]
         elif es_metrica_absoluta:
             column_to_plot = metrica
             gdf_plot[column_to_plot] = gdf_plot[column_to_plot].fillna(0)
@@ -578,7 +764,7 @@ class VisualizadorElectoral:
             opacity=opacidad,
             color_continuous_scale=color_scale,
             labels={column_to_plot: metrica},
-            range_color=[0, max_val]
+            range_color=range_color if 'range_color' in locals() else [0, max_val]
         )
         
         estado_nombre = ESTADOS.get(estado_id, 'Nacional') if estado_id else 'Nacional'
@@ -629,9 +815,22 @@ class VisualizadorElectoral:
                 font=dict(size=16, color='orange')
             )
         
-        gdf_plot['PARTIDO_PREDOMINANTE'] = gdf_plot[party_cols_2024].idxmax(axis=1).str.replace('_2024', '')
-        gdf_plot['VOTOS_GANADOR'] = gdf_plot[party_cols_2024].max(axis=1)
         gdf_plot['TOTAL_VOTOS'] = gdf_plot[party_cols_2024].sum(axis=1)
+        
+        # CORRECCIÓN: Si no hay votos, marcar como 'SIN_VOTOS' en lugar de asignar PAN por defecto
+        def get_ganador_seguro(row):
+            total = row[party_cols_2024].sum()
+            if total == 0:
+                return 'SIN_VOTOS', 0
+            ganador_col = row[party_cols_2024].idxmax()
+            ganador_partido = ganador_col.replace('_2024', '')
+            votos = row[ganador_col]
+            return ganador_partido, votos
+        
+        gdf_plot[['PARTIDO_PREDOMINANTE', 'VOTOS_GANADOR']] = gdf_plot.apply(
+            lambda row: pd.Series(get_ganador_seguro(row)), axis=1
+        )
+        
         gdf_plot['PORCENTAJE_GANADOR'] = (gdf_plot['VOTOS_GANADOR'] / gdf_plot['TOTAL_VOTOS'] * 100).fillna(0)
         gdf_plot['COLOR'] = gdf_plot['PARTIDO_PREDOMINANTE'].map(COLORES_PARTIDOS)
         gdf_plot['id'] = gdf_plot.index
@@ -650,6 +849,9 @@ class VisualizadorElectoral:
         fig = go.Figure()
         
         partidos_presentes = gdf_plot['PARTIDO_PREDOMINANTE'].unique()
+        
+        # CORRECCIÓN: Excluir 'SIN_VOTOS' del mapa
+        partidos_presentes = [p for p in partidos_presentes if p != 'SIN_VOTOS']
         
         for partido in partidos_presentes:
             df_partido = gdf_plot[gdf_plot['PARTIDO_PREDOMINANTE'] == partido]
@@ -1065,7 +1267,7 @@ def crear_app(visualizador):
     metricas_base = [
         'LISTA_NOMINAL_2024', 'TOTAL_VOTOS_2024', 'LISTA_NOMINAL_2018',
         'TOTAL_VOTOS_2018', 'LISTA_NOMINAL_2012', 'TOTAL_VOTOS_2012',
-        'CANDIDATO_NO_REGISTRADO_2024', 'VOTOS_NULOS_2024'
+        'VOTOS_NULOS_2024'
     ]
     for metrica in metricas_base:
         if not columnas_csv or metrica in columnas_csv:
@@ -1180,6 +1382,9 @@ def crear_app(visualizador):
                             style={'fontSize': '12px'}
                         ),
                         
+                        # NUEVO: Descripción de la métrica seleccionada
+                        html.Div(id='descripcion-metrica', className="mb-3"),
+                        
                         html.Hr(),
                         
                         html.Label([
@@ -1202,16 +1407,6 @@ def crear_app(visualizador):
                         ),
                         html.Small("↓ Menor = Ver nombres del mapa base", 
                                   className="text-muted d-block mb-3"),
-                        
-                        html.Hr(),
-                        
-                        # NUEVO: Indicador de modo optimizado
-                        dbc.Alert([
-                            html.I(className="fas fa-bolt me-2"),
-                            html.Small([
-                                "⚡ Modo optimizado: Los datos se cargan bajo demanda por estado."
-                            ], style={'fontSize': '10px'})
-                        ], color="success", className="mb-3 mt-2", style={'padding': '6px'}),
                         
                         html.Hr(),
                         
@@ -1345,6 +1540,64 @@ def crear_app(visualizador):
     # ========================================================================
     # CALLBACKS
     # ========================================================================
+    
+    @app.callback(
+        Output('descripcion-metrica', 'children'),
+        Input('dropdown-metrica', 'value')
+    )
+    def actualizar_descripcion_metrica(metrica):
+        """Muestra descripción de la métrica seleccionada"""
+        if not metrica or metrica == 'Por partidos':
+            return dbc.Alert([
+                html.I(className="fas fa-trophy me-2"),
+                html.Small("Mapa de predominancia electoral por partido", style={'fontSize': '11px'})
+            ], color="info", className="mb-0", style={'padding': '8px'})
+        
+        desc = DESCRIPCIONES_METRICAS.get(metrica)
+        if not desc:
+            return None
+        
+        contenido = [
+            html.B(desc.get('nombre', metrica), style={'fontSize': '12px'}),
+            html.Br(),
+            html.Small(desc.get('descripcion', ''), className="text-muted", style={'fontSize': '10px'}),
+        ]
+        
+        if 'formula' in desc:
+            contenido.extend([
+                html.Br(),
+                html.Small([
+                    html.I(className="fas fa-calculator me-1"),
+                    html.B("Fórmula: ", style={'fontSize': '10px'}),
+                    html.Code(desc['formula'], style={'fontSize': '9px', 'backgroundColor': '#f0f0f0', 'padding': '2px 4px'})
+                ])
+            ])
+        
+        if 'interpretacion' in desc:
+            contenido.extend([
+                html.Br(),
+                html.Small([
+                    html.I(className="fas fa-chart-line me-1"),
+                    html.Span(desc['interpretacion'], style={'fontSize': '9px'})
+                ], className="text-muted")
+            ])
+        
+        if 'uso' in desc:
+            contenido.extend([
+                html.Br(),
+                html.Small([
+                    html.I(className="fas fa-lightbulb me-1"),
+                    html.B("Uso: ", style={'fontSize': '10px'}),
+                    html.Span(desc['uso'], style={'fontSize': '10px'})
+                ], className="text-success")
+            ])
+        
+        return dbc.Alert(
+            contenido,
+            color="light",
+            className="mb-0",
+            style={'padding': '10px', 'border': '1px solid #dee2e6'}
+        )
     
     @app.callback(
         [Output('mapa-principal', 'figure'),
