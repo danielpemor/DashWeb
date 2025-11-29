@@ -93,7 +93,7 @@ DESCRIPCIONES_METRICAS = {
     },
     'MARGEN_VICTORIA_2024': {
         'nombre': '¿Qué tan reñida estuvo la elección?',
-        'descripcion': 'Por cuántos votos ganó el primer lugar vs el segundo (como la diferencia de goles en un partido)',
+        'descripcion': 'Diferencia de votos entre el primer y segundo lugar, expresada en porcentaje',
         'formula': '(Votos del ganador - Votos del segundo) / Total de votos × 100',
         'rango': '0-100%',
         'interpretacion': 'Menos de 5%=Súper reñida | 5-10%=Competida | 10-20%=Ventaja clara | Más de 20%=Ganó fácil',
@@ -116,14 +116,14 @@ DESCRIPCIONES_METRICAS = {
     },
     'TIPO_SECCION_ESTRATEGICA': {
         'nombre': '¿Qué tipo de zona es?',
-        'descripcion': 'Clasificación de la zona según su importancia estratégica (como priorizar tareas urgentes vs opcionales)',
+                'descripcion': 'Etiqueta que resume la situación de la zona. Analiza tamaño, competitividad, participación y lealtad del voto para clasificarla',
         'valores': 'CRÍTICA=Urgente defender | OPORTUNIDAD=Buen lugar para crecer | RIESGO=Zona en peligro | MOVILIZABLE=Gente por convencer | CONSOLIDADA=Ya ganada | BAJA PRIORIDAD=No prioritaria | NORMAL=Sin particularidades',
         'uso': 'Decidir dónde concentrar esfuerzo y recursos'
     },
     'PRIORIDAD_MOVILIZACION': {
         'nombre': '¿Qué tan urgente es trabajar esta zona?',
-        'descripcion': 'Calificación de 0 a 100 que indica qué tan importante es visitar y trabajar esta zona',
-        'formula': 'Cálculo automático basado en competitividad, tamaño y situación de la zona',
+        'descripcion': 'Calificación que combina qué tan reñida está la zona, cuánta gente hay, y qué tan estratégica es. Zonas grandes y competidas tienen mayor prioridad',
+        'formula': 'Puntuación base según tipo de zona × (1 + logaritmo del tamaño de la zona / 20)',
         'rango': '0-100 puntos',
         'interpretacion': 'Más de 90=¡URGENTE! | 80-90=Alta prioridad | 60-80=Prioridad media | 40-60=Prioridad baja | Menos de 40=Baja urgencia',
         'uso': 'Hacer una lista de zonas ordenadas por urgencia de visita'
@@ -138,8 +138,8 @@ DESCRIPCIONES_METRICAS = {
     },
     'NEP_2024': {
         'nombre': '¿Cuántos partidos realmente compiten?',
-        'descripcion': 'No es lo mismo tener 5 partidos donde uno domina, que 5 partidos parejos. Este número dice cuántos "realmente cuentan"',
-        'formula': 'Cálculo que pondera el tamaño de cada partido',
+        'descripcion': 'Mide cuántos partidos tienen peso real en la competencia. Si hay 5 partidos pero uno tiene 80% de votos, el NEP será cercano a 1 (solo cuenta ese partido dominante)',
+        'formula': '1 dividido entre la suma de los cuadrados de cada porcentaje (1 / Σ(porcentaje²))',
         'rango': '1 partido en adelante',
         'interpretacion': 'Menos de 2=Domina 1 partido | 2-3=Compiten 2 partidos | 3-4=Compiten 3-4 partidos | Más de 5=Voto muy repartido',
         'uso': 'Saber si es una zona de "uno contra uno" o si hay varios competidores fuertes'
@@ -708,7 +708,6 @@ class VisualizadorElectoral:
         elif es_metrica_absoluta:
             column_to_plot = metrica
             gdf_plot[column_to_plot] = gdf_plot[column_to_plot].fillna(0)
-            gdf_plot.loc[gdf_plot[column_to_plot] == 0, column_to_plot] = float('nan')
             max_val = gdf_plot[column_to_plot].quantile(0.95)
             color_scale = 'Blues' if 'LISTA_NOMINAL' in metrica or 'TOTAL_VOTOS' in metrica else 'Reds'
         else:
@@ -726,7 +725,6 @@ class VisualizadorElectoral:
                     axis=1
                 )
                 column_to_plot = 'porcentaje'
-                gdf_plot.loc[gdf_plot[column_to_plot] == 0, column_to_plot] = float('nan')
                 max_val = gdf_plot[column_to_plot].quantile(0.95)
                 color_scale = 'Reds'
         
@@ -764,8 +762,11 @@ class VisualizadorElectoral:
             opacity=opacidad,
             color_continuous_scale=color_scale,
             labels={column_to_plot: metrica},
-            range_color=range_color if 'range_color' in locals() else [0, max_val]
+            range_color=[0, max_val]
         )
+        
+        # CORRECCIÓN: Forzar centro en móviles
+        fig.update_mapboxes(center=center_coords, zoom=zoom_level)
         
         estado_nombre = ESTADOS.get(estado_id, 'Nacional') if estado_id else 'Nacional'
         
@@ -1266,8 +1267,7 @@ def crear_app(visualizador):
     # Métricas base
     metricas_base = [
         'LISTA_NOMINAL_2024', 'TOTAL_VOTOS_2024', 'LISTA_NOMINAL_2018',
-        'TOTAL_VOTOS_2018', 'LISTA_NOMINAL_2012', 'TOTAL_VOTOS_2012',
-        'VOTOS_NULOS_2024'
+        'TOTAL_VOTOS_2018', 'LISTA_NOMINAL_2012', 'TOTAL_VOTOS_2012'
     ]
     for metrica in metricas_base:
         if not columnas_csv or metrica in columnas_csv:
